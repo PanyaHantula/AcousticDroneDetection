@@ -26,24 +26,25 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
     return y
 
 # -----------------------------------------------------------------
-# Encoding targets and data-splitting 
+# Encoding targets
 labels = ['Drone','No_Drone']           # define lables
 label_encoder = LabelEncoder()
 encoded_labels = label_encoder.fit_transform(labels)
 
-#print("#: Encoding targets and data-splitting")
-#print("labels:")
-#print(labels)
+print("#: Encoding targets")
+print("labels:")
+print(labels)
 
 # -----------------------------------------------------------------
-# Load ML classification model as a pickle file 
-model_pkl_file = "./model/2024-09-18 02:58:25.788779.pkl"
+# Load ML classification model as a pickle file
+print("Load ML classification model as a pickle file")
+model_pkl_file = "/Users/panya/Project-ALL/DroneClassification/AcousticDroneDetection/model/2024-09-18 02:58:25.788779.pkl"
 with open(model_pkl_file, 'rb') as file:  
     model = pickle.load(file)
 
 # -----------------------------------------------------------------
 # Audio Test Model
-audio_path = "./dataset/Natural_3-14-ex36.wav"
+audio_path = "/Users/panya/Project-ALL/DroneClassification/AcousticDroneDetection/dataset/Drone/5m-100m-ex1.wav"
 #print("File Audio Test: " + audio_path)
 audio_test, sample_rate = librosa.load(audio_path, duration=3)  # Load audio and limit to 3 seconds
 
