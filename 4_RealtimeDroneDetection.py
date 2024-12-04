@@ -6,7 +6,8 @@ from sklearn.preprocessing import LabelEncoder
 import librosa 
 import librosa.display 
 import matplotlib.pyplot as plt 
-
+from matplotlib.animation import FuncAnimation
+import random
 #--------------------------------------------------------------------------
 # Load CNN Model
 print('-----------------------------------------')
@@ -45,7 +46,7 @@ def extract_mel_spectrogram(audio):
      #### Converts audio signal to a mel spectrogram. ####
     mel_spectrogram = librosa.feature.melspectrogram(y=audio, sr=samplerate, n_fft=2048, hop_length=128, n_mels=256)
     mel_spectrogram_db = librosa.power_to_db(mel_spectrogram, ref=np.max)
-    print(f'Shape of spectrogram : {mel_spectrogram_db.shape }')
+   # print(f'Shape of spectrogram : {mel_spectrogram_db.shape }')
     return mel_spectrogram_db
 
 def predict_audio_class(audio_frame):
@@ -54,78 +55,110 @@ def predict_audio_class(audio_frame):
     mel_spectrogram = np.expand_dims(mel_spectrogram, axis=0)  # Add batch dimension
     mel_spectrogram = np.expand_dims(mel_spectrogram, axis=-1)  # Add channel dimension
 
-    prediction = myModel.predict(mel_spectrogram)
-    predicted_class = np.argmax(prediction, axis=1)
-    return predicted_class
+    PredictionProb = myModel.predict(mel_spectrogram)
+    predicted_class = np.argmax(PredictionProb, axis=1)
+    return PredictionProb,predicted_class
 
 
-def PlotAudioGraph (y_signal,title):
-    plt.figure(figsize=(10, 8))
-    plt.suptitle(f'Predicte Output : {str(title[0])}',fontweight="bold", size=20)
+def initGraph(y_signal):
+        global TimeDomainGraph, FrqeDomainGraph ,SpectrogramGraph, Maintitle, figure
 
-    # ----- Plot Audio Waveform  -----
-    plt.subplot(2, 2, 1)
-    plt.title(f'Audio Waveform')
-    plt.plot(np.linspace(0, len(y_signal) / samplerate, len(y_signal)), y_signal)
-    plt.xlabel('Time (s)')
-    plt.ylabel('Amplitude')
-    plt.grid()
-    # ----- Plot FFT  -----
-    xf,yf = audioFFT_cal(y_signal)    
-    plt.subplot(2, 2, 2)
-    plt.title(f'FFT waveform')
-    plt.plot(xf, yf)
-    plt.grid()
-    plt.xlabel('Freq (Hz)')
-    plt.ylabel('Normalize Amplitude (dB)')
-    plt.ylim(-70,80)
+        plt.ion()  # turning interactive mode on
+        
+        figure = plt.figure(figsize=(10, 8))
+        figure.suptitle(f'Prediction Output : -',fontweight="bold", size=20)
 
-    # ------- Plot Spectrogram ---------
-    spectrogram_db = extract_mel_spectrogram(y_signal)
-    plt.subplot(2, 1, 2)
-    plt.title(f'Spectrogram')
-    librosa.display.specshow(spectrogram_db, sr=samplerate, x_axis='time', y_axis='linear', cmap='viridis')
-    #cmap = 'viridis', 'plasma', 'inferno', 'magma', 'cividis'
-    plt.colorbar(format='%+2.0f dB')
-    plt.title(f'Spectrogram shape {spectrogram_db.shape}')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Frequency (Hz)')
-    plt.grid()
+        gs = figure.add_gridspec(2,2)
+        ax1 = figure.add_subplot(gs[0, 0])
+        ax2 = figure.add_subplot(gs[0, 1])
+        ax3 = figure.add_subplot(gs[1, :])
 
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.show()
+        #figure, ax = plt.subplots(2,2,figsize=(10, 8),squeeze=False)
+        
+        # ----- Plot Audio Waveform  -----
+        audioTimespace = np.linspace(0, len(y_signal) / samplerate, len(y_signal))
+        ax1.title.set_text('Audio Waveform')
+        ax1.set_ylabel('Normalize Amplitude')
+        ax1.set_xlabel('Time (s)')
+        ax1.grid()
+        TimeDomainGraph, = ax1.plot(audioTimespace, y_signal)
+
+        # ----- Plot FFT  -----
+        xf,yf = audioFFT_cal(y_signal)   
+        ax2.title.set_text('FFT waveform')
+        ax2.set_ylabel('Normalize Amplitude (dB)')
+        ax2.set_xlabel('Freq (Hz)')
+        ax2.grid()
+        ax2.set_ylim(-70,80)
+        FrqeDomainGraph, = ax2.plot(xf, yf)
+
+        # ------- Plot Spectrogram ---------
+        spectrogram_db = extract_mel_spectrogram(y_signal)
+        ax3.title.set_text(f'Spectrogram shape {spectrogram_db.shape}')
+        ax3.set_ylabel('Frequency (Hz)')
+        ax3.set_xlabel('Time (s)')
+        ax3.grid()
+        SpectrogramGraph = ax3.imshow(spectrogram_db,interpolation='nearest', aspect='auto')
+            
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+
+def UpdatGraph(y_signal,title):
+        # plotting newer graph
+        TimeDomainGraph.set_ydata(y_signal)
+
+        xf,yf = audioFFT_cal(y_signal) 
+        FrqeDomainGraph.set_xdata(xf)
+        FrqeDomainGraph.set_ydata(yf)
+
+        spectrogram_db = extract_mel_spectrogram(y_signal)
+        SpectrogramGraph.set_data(spectrogram_db)
+
+        figure.suptitle(f'Prediction Output : {str(title[0])}',fontweight="bold", size=20)
+
+        figure.canvas.draw()
+        figure.canvas.flush_events()
+        # plt.pause(0.01)
 
 def run():
     print("Listening... ")
-    
-    # A list to store the recorded audio chunks
     audio_buffer = []
-    try:
+
+    try:   
+        # init first graph   
+        chunk = sd.rec(int(samplerate * chunk_duration), samplerate=samplerate, channels=1, dtype='float32')
+        sd.wait()  
+        audio_buffer = np.squeeze(chunk)
+        initGraph(audio_buffer)
+
         while True:
             # Record a chunk of audio
-            print(f"Recording {chunk_duration} seconds...")
+            # print(f"Recording {chunk_duration} seconds...")
             chunk = sd.rec(int(samplerate * chunk_duration), samplerate=samplerate, channels=1, dtype='float32')
             sd.wait()  # Wait for the chunk to finish recording
 
             # predict the concatenated audio
             print("predicting audio...")
             audio_buffer = np.squeeze(chunk)
-            class_prediction = predict_audio_class(audio_buffer)
+            audio_predic = audio_buffer[IndexOffset : IndexOffset + samplerate]
+            print(len(audio_buffer))
+            PredictionProb,class_prediction = predict_audio_class(audio_predic)
             lable_Output = label_encoder.inverse_transform(class_prediction)
+            print(f"Predicted Prob: {PredictionProb}")
             print(f"Predicted Class: {class_prediction}")
             print(f'Predicted Lable: {lable_Output}')
-            PlotAudioGraph(audio_buffer,lable_Output)
             print()
-        
+
+            UpdatGraph(audio_buffer,lable_Output)
+
     except Exception as e:
         print("An error occurred:", e)
 
 if __name__ == '__main__':
-    global samplerate
-    global chunk_duration
+    global samplerate, chunk_duration, IndexOffset
 
     samplerate = 22050  # Whisper expects 16kHz audio
-    chunk_duration = 1  # Duration of each audio chunk in seconds
+    chunk_duration = 1.5  # Duration of each audio chunk in seconds
+    IndexOffset = 10000
 
     print("System Start...")
     while True:
