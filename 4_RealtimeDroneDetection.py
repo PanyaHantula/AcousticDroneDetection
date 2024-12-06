@@ -35,7 +35,6 @@ n_std_thresh_stationary = 1
 
 samplerate = 22050  
 TimeRecord = 1
-OffsetIndex = 1
 
 from scipy.fft import fft, fftfreq # type: ignore
 # ----- 1-D discrete Fourier transforms ------
@@ -135,10 +134,9 @@ def run():
 
     try:   
         # init first graph   
-        audio_buffer = sd.rec(int((samplerate * TimeRecord) + OffsetIndex), samplerate=samplerate, channels=1, dtype='float32')
+        audio_buffer = sd.rec(int(samplerate * TimeRecord), samplerate=samplerate, channels=1, dtype='float32')
         sd.wait()  
         audio_buffer = np.squeeze(audio_buffer)
-        audio_buffer = audio_buffer[OffsetIndex:samplerate*2]
 
         # normalize audio  
         max_value = np.max(np.abs(audio_buffer))       # Determine the maximum values
@@ -156,11 +154,10 @@ def run():
         while True:
             # Record a chunk of audio
             # print(f"Recording {chunk_duration} seconds...")
-            audio_buffer = sd.rec(int((samplerate * TimeRecord) + OffsetIndex), samplerate=samplerate, channels=1, dtype='float32')
+            audio_buffer = sd.rec(int(samplerate * TimeRecord), samplerate=samplerate, channels=1, dtype='float32')
             sd.wait()  
             audio_buffer = np.squeeze(audio_buffer)
-            audio_buffer = audio_buffer[OffsetIndex:samplerate*2]
-
+            
             # normalize audio  
             max_value = np.max(np.abs(audio_buffer))       # Determine the maximum values
             audio_normalize = audio_buffer/max_value        # Use max_value and normalize sound data to get values between -1 & +1
