@@ -7,7 +7,6 @@ import librosa
 import librosa.display 
 import matplotlib.pyplot as plt 
 from matplotlib.animation import FuncAnimation
-import noisereduce as nr        # type: ignore
 
 #--------------------------------------------------------------------------
 # Load CNN Model
@@ -28,19 +27,13 @@ print("labels : " + str(labels))
 label_encoder = LabelEncoder()
 label_encoder.fit_transform(labels)
 
-#-----------------------------------------------------------------------
-stationary=True
-prop_decrease=1
-n_std_thresh_stationary = 1
-
-samplerate = 22050  
-TimeRecord = 1
-OffsetIndex = 1
-
 from scipy.fft import fft, fftfreq # type: ignore
+samplerate = 22050  # Whisper expects 16kHz audio
+chunk_duration = 1  # Duration of each audio chunk in seconds
+
 # ----- 1-D discrete Fourier transforms ------
 def audioFFT_cal (data):
-    N = int (TimeRecord * samplerate)        #   Number of sample points
+    N = int (chunk_duration * samplerate)        #   Number of sample points
 
     T = 1.0 / (samplerate)   # sample spacing
     x = np.linspace(0.0, N*T, N, endpoint=False)
@@ -89,7 +82,6 @@ def initGraph(y_signal):
     ax1.title.set_text('Audio Waveform')
     ax1.set_ylabel('Normalize Amplitude')
     ax1.set_xlabel('Time (s)')
-    ax1.set_ylim(-1.2,1.2)
     ax1.grid()
     TimeDomainGraph, = ax1.plot(audioTimespace, y_signal)
 
@@ -129,64 +121,64 @@ def UpdatGraph(y_signal,title):
     figure.canvas.flush_events()
     # plt.pause(0.01)
 
+import pyaudio
+import numpy as np
+
+FRAMES_PER_BUFFER = 1000
+FORMAT = pyaudio.paFloat32
+CHANNELS = 1
+RATE = 22050
+p = pyaudio.PyAudio()
+
+def record_audio():
+    stream = p.open(
+        format=FORMAT,
+        channels=CHANNELS,
+        rate=RATE,
+        input=True,
+        frames_per_buffer=FRAMES_PER_BUFFER
+    )
+
+    #print("start recording...")
+
+    frames = []
+    seconds = 1
+    for i in range(0, int(RATE / FRAMES_PER_BUFFER * seconds)):
+        data = stream.read(FRAMES_PER_BUFFER)
+        frames.append(data)
+
+    # print("recording stopped")
+
+    stream.stop_stream()
+    stream.close()
+    
+    return np.frombuffer(b''.join(frames), dtype=np.float32)
+
 def run():
     print("Listening... ")
     audio_buffer = []
 
-    try:   
-        # init first graph   
-        audio_buffer = sd.rec(int((samplerate * TimeRecord) + OffsetIndex), samplerate=samplerate, channels=1, dtype='float32')
-        sd.wait()  
-        audio_buffer = np.squeeze(audio_buffer)
-        audio_buffer = audio_buffer[OffsetIndex:samplerate*2]
-
-        # normalize audio  
-        max_value = np.max(np.abs(audio_buffer))       # Determine the maximum values
-        audio_normalize = audio_buffer/max_value        # Use max_value and normalize sound data to get values between -1 & +1
-
-        # perform noise reduction
-        audio_reduced_noise = nr.reduce_noise(y=audio_normalize, 
-                                            sr=samplerate, 
-                                            stationary=stationary, 
-                                            prop_decrease=prop_decrease,
-                                            n_std_thresh_stationary=n_std_thresh_stationary)    # ,use_torch=True )
-
-        initGraph(audio_reduced_noise)
+    try:    
+        audio_buffer = record_audio()
+        initGraph(audio_buffer)
 
         while True:
-            # Record a chunk of audio
-            # print(f"Recording {chunk_duration} seconds...")
-            audio_buffer = sd.rec(int((samplerate * TimeRecord) + OffsetIndex), samplerate=samplerate, channels=1, dtype='float32')
-            sd.wait()  
-            audio_buffer = np.squeeze(audio_buffer)
-            audio_buffer = audio_buffer[OffsetIndex:samplerate*2]
-
-            # normalize audio  
-            max_value = np.max(np.abs(audio_buffer))       # Determine the maximum values
-            audio_normalize = audio_buffer/max_value        # Use max_value and normalize sound data to get values between -1 & +1
-
-            # perform noise reduction
-            audio_reduced_noise = nr.reduce_noise(y=audio_normalize, 
-                                                sr=samplerate, 
-                                                stationary=stationary, 
-                                                prop_decrease=prop_decrease,
-                                                n_std_thresh_stationary=n_std_thresh_stationary)    # ,use_torch=True )
-
-            # # predict the concatenated audio
+            audio_buffer = record_audio()
+            # predict the concatenated audio
             print("predicting audio...")
-            PredictionProb,class_prediction = predict_audio_class(audio_reduced_noise)
+            #audio_buffer = np.squeeze(audio_buffer)
+            PredictionProb,class_prediction = predict_audio_class(audio_buffer)
             lable_Output = label_encoder.inverse_transform(class_prediction)
             print(f"Predicted Prob: {PredictionProb}")
             print(f"Predicted Class: {class_prediction}")
             print(f'Predicted Lable: {lable_Output}')
             print()
 
-            UpdatGraph(audio_reduced_noise,lable_Output)
+            UpdatGraph(audio_buffer,lable_Output)
 
     except Exception as e:
         print("An error occurred:", e)
 
-#-------------------------------------------------
 if __name__ == '__main__':
     print("System Start...")
     run()
